@@ -12,20 +12,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+ 
+
 """A module that feeds information from two named pipes into shaka-packager."""
+
+ 
 
 import os
 import subprocess
+
+ 
 
 from . import input_configuration
 from . import node_base
 from . import pipeline_configuration
 
+ 
+
 # Alias a few classes to avoid repeating namespaces later.
 MediaType = input_configuration.MediaType
 
+ 
+
 ManifestFormat = pipeline_configuration.ManifestFormat
 StreamingMode = pipeline_configuration.StreamingMode
+
+ 
 
 
 INIT_SEGMENT = {
@@ -34,11 +46,20 @@ INIT_SEGMENT = {
   MediaType.TEXT: '{dir}/text_{language}_init.{format}',
 }
 
+ 
+
 MEDIA_SEGMENT = {
   MediaType.AUDIO: '{dir}/audio_{language}_{channels}c_{bitrate}_$Number$.{format}',
   MediaType.VIDEO: '{dir}/video_{resolution_name}_{bitrate}_$Number$.{format}',
   MediaType.TEXT: '{dir}/text_{language}_$Number$.{format}',
 }
+
+MEDIA_SEGMENT_HLS = {
+  MediaType.AUDIO: '{dir}/audio_{language}_{channels}c_{bitrate}_$Number$.aac',
+  MediaType.VIDEO: '{dir}/video_{resolution_name}_{bitrate}_$Number$.ts',
+  MediaType.TEXT: '{dir}/text_{language}_$Number$.{format}',
+}
+ 
 
 SINGLE_SEGMENT = {
   MediaType.AUDIO: '{dir}/audio_{language}_{channels}c_{bitrate}.{format}',
@@ -46,12 +67,18 @@ SINGLE_SEGMENT = {
   MediaType.TEXT: '{dir}/text_{language}.{format}',
 }
 
+ 
+
 class SegmentError(Exception):
   """Raise when segment is incompatible with format."""
   pass
 
+ 
+
 
 class PackagerNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
+
+ 
 
   def __init__(self, pipeline_config, output_dir, output_streams):
     super().__init__()
@@ -60,17 +87,25 @@ class PackagerNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
     self._segment_dir = os.path.join(output_dir, pipeline_config.segment_folder)
     self._output_streams = output_streams
 
+ 
+
   def start(self):
     args = [
         'packager',
     ]
 
+ 
+
     args += [self._setup_stream(stream) for stream in self._output_streams]
+
+ 
 
     args += [
         # Segment duration given in seconds.
         '--segment_duration', str(self._pipeline_config.segment_size),
     ]
+
+ 
 
     if self._pipeline_config.streaming_mode == StreamingMode.LIVE:
       args += [
@@ -88,10 +123,16 @@ class PackagerNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
           str(self._pipeline_config.update_period),
       ]
 
+ 
+
     args += self._setup_manifest_format()
+
+ 
 
     if self._pipeline_config.encryption.enable:
       args += self._setup_encryption()
+
+ 
 
     stdout = None
     if self._pipeline_config.debug_logs:
@@ -100,9 +141,13 @@ class PackagerNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
       # the screen.
       stdout = open('PackagerNode.log', 'w')
 
+ 
+
     self._process = self._create_process(args,
                                          stderr=subprocess.STDOUT,
                                          stdout=stdout)
+
+ 
 
   def _setup_stream(self, stream):
     dict = {
@@ -110,27 +155,41 @@ class PackagerNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
         'stream': stream.type.value,
     }
 
+ 
+
     # Note: Shaka Packager will not accept 'und' as a language, but Shaka
     # Player will fill that in if the language metadata is missing from the
     # manifest/playlist.
     if stream.input.language and stream.input.language != 'und':
       dict['language'] = stream.input.language
 
+ 
+
     if self._pipeline_config.segment_per_file:
-      dict['init_segment'] = stream.fill_template(
-          INIT_SEGMENT[stream.type],
-          dir=self._segment_dir)
-      dict['segment_template'] = stream.fill_template(
-          MEDIA_SEGMENT[stream.type],
-          dir=self._segment_dir)
+      if  not ManifestFormat.HLS in self._pipeline_config.manifest_format:
+        dict['init_segment'] = stream.fill_template(
+            INIT_SEGMENT[stream.type],
+            dir=self._segment_dir)
+      if ManifestFormat.HLS in self._pipeline_config.manifest_format:
+        dict['segment_template'] = stream.fill_template(
+            MEDIA_SEGMENT_HLS[stream.type],
+            dir=self._segment_dir)
+      else:
+        dict['segment_template'] = stream.fill_template(
+            MEDIA_SEGMENT[stream.type],
+            dir=self._segment_dir)
     else:
       dict['output'] = stream.fill_template(
           SINGLE_SEGMENT[stream.type],
           dir=self._segment_dir)
 
+ 
+
     # The format of this argument to Shaka Packager is a single string of
     # key=value pairs separated by commas.
     return ','.join(key + '=' + value for key, value in dict.items())
+
+ 
 
   def _setup_manifest_format(self):
     args = []
@@ -159,6 +218,8 @@ class PackagerNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
           os.path.join(self._output_dir, self._pipeline_config.hls_output),
       ]
     return args
+
+ 
 
   def _setup_encryption(self):
     # Sets up encryption of content.

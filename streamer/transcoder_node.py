@@ -90,7 +90,7 @@ class TranscoderNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
             # This is in packets, but for raw images, that means frames.  A
             # 720p PPM frame is 2.7MB, and a 1080p PPM is 6.2MB.  The entire
             # queue, when full, must fit into memory.
-            '-thread_queue_size', '200',
+            '-thread_queue_size', '50',
         ]
 
       if input.start_time:
@@ -255,8 +255,13 @@ class TranscoderNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
       args += [
           # MPEG-TS format works well in a pipe.
           '-f', 'mpegts',
+          #configured by user for framerate
+          '-r', '24',
           # The only format supported by QT/Apple.
           '-pix_fmt', 'yuv420p',
+          #configured by user
+          '-x264opts', "keyint=48:min-keyint=48:no-scenecut", 
+          '-tune', 'zerolatency',
           # Require a closed GOP.  Some decoders don't support open GOPs.
           '-flags', '+cgop',
           # Set the H264 profile.  Without this, the default would be "main".
@@ -287,11 +292,15 @@ class TranscoderNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
     args += [
         # No audio encoding for video.
         '-an',
+        #configured by user
+        '-speed', '24',
+        '-threads', '8',
         # Set codec and bitrate.
+        '-c:a','aac',
         '-c:v', stream.get_ffmpeg_codec_string(hwaccel_api),
         '-b:v', stream.get_bitrate(),
         # Set minimum and maximum GOP length.
-        '-keyint_min', str(keyframe_interval), '-g', str(keyframe_interval),
+        # '-keyint_min', '48', '-g', '48',
         # Set video filters.
         '-vf', ','.join(filters),
     ]

@@ -1,0 +1,6 @@
+inputs:
+  - name: rtmp://localhost/live/abcd
+    media_type: video
+    
+  - name: rtmp://localhost/live/abcd
+    media_type: audio
