@@ -44,6 +44,7 @@ class TranscoderNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
         # the named pipe in advance, it definitely already exists. A prompt
         # would block ffmpeg to wait for user input.
         '-y',
+        '-rw_timeout', '505000000',
     ]
 
     if self._pipeline_config.quiet:
@@ -156,6 +157,7 @@ class TranscoderNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
         # TODO: This implied downmixing is not ideal.
         # Set the number of channels to the one specified in the config.
         '-ac', str(stream.channels),
+        '-af', 'aselect=concatdec_select,aresample=async=1'
     ]
 
     if stream.channels == 6:
@@ -226,6 +228,7 @@ class TranscoderNode(node_base.PolitelyWaitOnFinishMixin, node_base.NodeBase):
     # which causes playback failures in ExoPlayer.
     # https://github.com/google/shaka-streamer/issues/36
     filters.append('setsar=1:1')
+    filters.append('select=concatdec_select')
 
     # TODO: Use the same intermediate format as output format?
 
